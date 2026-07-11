@@ -1,0 +1,20 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.eggs/
+
+# Rust build artifacts (test crate)
+tests/testdata/wasm_hello/target/
+target/
+
+# Local agent run records
+*.manifest.json
+
+# Editor / OS
+.vscode/
+.DS_Store
+*.swp
