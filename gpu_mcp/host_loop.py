@@ -54,17 +54,25 @@ class LocalHostLoop:
         self.name = name
         tmp = Path(_tempfile.gettempdir())
         self.manifest_path = Path(manifest_path or tmp / f"{name}.manifest.json")
-        self.history: list[dict] = [{"role": "system", "content": self.SYSTEM}]
+        self.history: list[dict] = []  # system is sent via API field, not in transcript
         self.steps: list[LoopStep] = []
         self.run_id = uuid.uuid4().hex[:12]
 
     # ---- planner (brain) ----
     def _default_planner(self, prompt: str) -> str:
-        # ollama default; override for a different local brain
+        # ollama default; override for a different local brain.
+        # SYSTEM is sent as ollama's `system` field so the tool-call grammar
+        # is honored (a bare concatenated prompt makes coder models ignore it).
         try:
             out = subprocess.run(
                 ["curl", "-s", "-m", "180", "-d",
-                 json.dumps({"model": "qwen2.5-coder:3b", "prompt": prompt, "stream": False}),
+                 json.dumps({
+                     "model": "qwen2.5-coder:7b",
+                     "prompt": prompt,
+                     "system": self.SYSTEM,
+                     "stream": False,
+                     "options": {"num_ctx": 2048, "temperature": 0.2},
+                 }),
                  "http://localhost:11434/api/generate"],
                 capture_output=True, text=True, timeout=200,
             )
@@ -98,15 +106,15 @@ class LocalHostLoop:
             out = self.planner(self._prompt())
             self.history.append({"role": "assistant", "content": out})
             self.steps.append(LoopStep(step, "planner", "think", out[:200]))
-            m = re.search(r"TOOL:\s*(\w+)(?:\s+(\S+))?", out)
-            if m and m.group(1) in self.tools:
-                res = self.execute(m.group(1), m.group(2))
+            m = re.search(r"TOOL:\s*([A-Za-z_][\w]*)(?:\s+([^\n]*?))?", out, re.IGNORECASE)
+            if m and m.group(1).lower() in self.tools:
+                res = self.execute(m.group(1).lower(), (m.group(2) or "").strip())
                 ok = audit(res)
-                self.steps.append(LoopStep(step, "executor", m.group(1), str(res)[:200], ok))
+                self.steps.append(LoopStep(step, "executor", m.group(1).lower(), str(res)[:200], ok))
                 self.history.append({"role": "user",
                                      "content": f"TOOL_RESULT: {json.dumps(res, default=str)[:400]}"})
                 continue
-            fm = re.search(r"FINAL:\s*([\s\S]+)", out)
+            fm = re.search(r"FINAL:\s*([\s\S]+)", out, re.IGNORECASE)
             if fm:
                 answer = fm.group(1).strip()
                 self.steps.append(LoopStep(step, "planner", "final", answer[:200], True))

@@ -1,7 +1,7 @@
 """gpu_agent.py — fully-offline sovereign GPU agent on Victus (RTX 3050 6GB).
 
 A concrete instance of gpu_mcp.host_loop.LocalHostLoop:
-  brain  : ollama qwen2.5-coder:3b @ :11434 (disk weights, ZERO network)
+  brain  : ollama qwen2.5-coder:7b @ :11434 (disk weights, ZERO network)
   hands  : CUDA tools on the host
            - probe_gpu     : live nvidia-smi telemetry
            - compile_kernel: nvcc (via MSVC vcvars64.bat) compile a matmul kernel
@@ -64,7 +64,7 @@ int main(){
 
 
 class GPUAgent(LocalHostLoop):
-    def __init__(self, model: str = "qwen2.5-coder:3b", max_steps: int = 6):
+    def __init__(self, model: str = "qwen2.5-coder:7b", max_steps: int = 6):
         self.model = model
         super().__init__(
             planner=self._ollama_planner,
@@ -82,7 +82,12 @@ class GPUAgent(LocalHostLoop):
         try:
             out = subprocess.run(
                 ["curl", "-s", "-m", "180", "-d",
-                 json.dumps({"model": self.model, "prompt": prompt, "stream": False}),
+                 json.dumps({
+                     "model": self.model, "prompt": prompt,
+                     "system": "You are a sovereign local agent. Emit ONE tool call per turn as `TOOL: <name> [arg]`, or `FINAL: <answer>` when done. Be terse.",
+                     "stream": False,
+                     "options": {"num_ctx": 2048, "temperature": 0.2},
+                 }),
                  "http://localhost:11434/api/generate"],
                 capture_output=True, text=True, timeout=200,
             )
