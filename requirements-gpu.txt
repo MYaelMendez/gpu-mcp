@@ -1,0 +1,6 @@
+# Optional CuPy verification environment; the MCP server remains stdlib-only.
+# Reference Windows environment: Python 3.12.13 in an ASCII-only physical path.
+# Install exactly one CuPy wheel family; this one targets CUDA 13.x.
+cupy-cuda13x==14.2.0
+numpy==2.5.3
+cuda-pathfinder==1.8.3
